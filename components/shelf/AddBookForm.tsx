@@ -2,7 +2,7 @@
 
 import { useState, FormEvent, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, X } from "@phosphor-icons/react";
+import { Plus, X, MagnifyingGlass } from "@phosphor-icons/react";
 import type { BookStatus, UserId } from "@/types";
 
 interface AddBookFormProps {
@@ -32,6 +32,8 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
   const [status, setStatus] = useState<BookStatus>("want-to-read");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [coverSearching, setCoverSearching] = useState(false);
+  const [coverResult, setCoverResult] = useState<"idle" | "found" | "not_found">("idle");
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -50,8 +52,31 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
     setTitle("");
     setAuthor("");
     setCoverUrl("");
+    setCoverSearching(false);
+    setCoverResult("idle");
     setStatus("want-to-read");
     setNotes("");
+  }
+
+  async function handleFindCover() {
+    if (!title.trim() || !author.trim()) return;
+    setCoverSearching(true);
+    setCoverResult("idle");
+    try {
+      const params = new URLSearchParams({ title: title.trim(), author: author.trim() });
+      const res = await fetch(`/api/covers?${params}`);
+      const data = await res.json();
+      if (data.coverUrl) {
+        setCoverUrl(data.coverUrl);
+        setCoverResult("found");
+      } else {
+        setCoverResult("not_found");
+      }
+    } catch {
+      setCoverResult("not_found");
+    } finally {
+      setCoverSearching(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -141,16 +166,35 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-text-secondary mb-1 block">
-                Cover image URL (optional)
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-text-secondary">
+                  Cover image URL (optional)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleFindCover}
+                  disabled={!title.trim() || !author.trim() || coverSearching}
+                  className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <MagnifyingGlass size={12} weight="bold" />
+                  {coverSearching ? "Searching…" : "Find cover"}
+                </button>
+              </div>
               <input
                 type="url"
                 value={coverUrl}
                 onChange={(e) => setCoverUrl(e.target.value)}
-                placeholder="https://..."
+                placeholder={coverSearching ? "Looking up cover…" : "https://..."}
                 className="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors"
               />
+              {coverResult === "not_found" && (
+                <p className="mt-1 text-xs text-text-secondary/70">
+                  No cover found — you can paste one manually
+                </p>
+              )}
+              {coverResult === "found" && (
+                <p className="mt-1 text-xs text-green-600">Cover found ✓</p>
+              )}
             </div>
 
             <div>
