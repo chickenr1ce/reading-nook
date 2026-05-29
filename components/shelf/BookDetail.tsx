@@ -27,6 +27,7 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
   const [coverUrl, setCoverUrl] = useState(book?.coverUrl ?? "");
   const [coverSearching, setCoverSearching] = useState(false);
   const [coverResult, setCoverResult] = useState<"idle" | "found" | "not_found">("idle");
+  const [draftNotes, setDraftNotes] = useState(book?.notes ?? "");
 
   // Sync local state when book changes (different book selected)
   useEffect(() => {
@@ -34,6 +35,7 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
     setDraftTitle(book.title);
     setDraftAuthor(book.author);
     setCoverUrl(book.coverUrl ?? "");
+    setDraftNotes(book.notes ?? "");
     setRating(book.rating);
     setCoverResult("idle");
   }, [book?.id]);
@@ -223,16 +225,24 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
             </div>
 
             {/* Notes */}
-            {book.notes && (
-              <div>
-                <label className="text-xs font-medium text-text-secondary mb-1 block">
-                  Notes
-                </label>
-                <p className="text-sm text-text-primary leading-relaxed bg-border/20 rounded-lg p-3">
-                  {book.notes}
-                </p>
-              </div>
-            )}
+            <div>
+              <label className="text-xs font-medium text-text-secondary mb-1 block">
+                Notes
+              </label>
+              <textarea
+                value={draftNotes}
+                onChange={(e) => setDraftNotes(e.target.value)}
+                onBlur={() => {
+                  const trimmed = draftNotes.trim();
+                  if (trimmed !== (book.notes ?? "")) {
+                    onUpdate(book.id, { notes: trimmed });
+                  }
+                }}
+                rows={3}
+                placeholder="Thoughts, quotes, reactions…"
+                className="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors resize-none"
+              />
+            </div>
 
             {/* Cover image */}
             <div>
