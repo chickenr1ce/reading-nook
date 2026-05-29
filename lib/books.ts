@@ -46,12 +46,14 @@ export async function getBook(id: string): Promise<Book | null> {
 
 export async function updateBook(
   id: string,
-  patch: Partial<Pick<Book, "status" | "rating" | "notes" | "coverUrl">>
+  patch: Partial<Pick<Book, "title" | "author" | "status" | "rating" | "notes" | "coverUrl">>
 ): Promise<Book | null> {
   const exists = await redis.exists(bookKey(id));
   if (!exists) return null;
 
   const updates: Record<string, unknown> = {};
+  if (patch.title !== undefined) updates.title = patch.title;
+  if (patch.author !== undefined) updates.author = patch.author;
   if (patch.status !== undefined) updates.status = patch.status;
   if (patch.rating !== undefined) updates.rating = patch.rating;
   if (patch.notes !== undefined) updates.notes = patch.notes;

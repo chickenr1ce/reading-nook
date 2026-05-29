@@ -76,7 +76,7 @@ export function Bookshelf({
 
   async function handleUpdateBook(
     id: string,
-    patch: Partial<Pick<Book, "status" | "rating" | "notes">>
+    patch: Partial<Pick<Book, "title" | "author" | "status" | "rating" | "notes" | "coverUrl">>
   ) {
     const res = await fetch(`/api/books/${id}`, {
       method: "PATCH",

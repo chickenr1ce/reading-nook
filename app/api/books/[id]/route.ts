@@ -28,6 +28,8 @@ export async function PATCH(
   }
 
   const book = await updateBook(id, {
+    title: body.title,
+    author: body.author,
     status: body.status,
     rating: body.rating,
     notes: body.notes,

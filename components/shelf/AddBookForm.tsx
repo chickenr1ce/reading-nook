@@ -34,6 +34,12 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [coverSearching, setCoverSearching] = useState(false);
   const [coverResult, setCoverResult] = useState<"idle" | "found" | "not_found">("idle");
+  const [searchResults, setSearchResults] = useState<Array<{ title: string; author: string; coverUrl: string | null }>>([]);
+  const [searchingTitle, setSearchingTitle] = useState(false);
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -48,14 +54,49 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
+  // Debounced title search
+  useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (title.trim().length < 2) {
+      setSearchResults([]);
+      setSearchDropdownOpen(false);
+      return;
+    }
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearchingTitle(true);
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(title.trim())}`);
+        const data = await res.json();
+        setSearchResults(data);
+        setSearchDropdownOpen(data.length > 0);
+        setHighlightIndex(-1);
+      } finally {
+        setSearchingTitle(false);
+      }
+    }, 300);
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [title]);
+
   function reset() {
     setTitle("");
     setAuthor("");
     setCoverUrl("");
     setCoverSearching(false);
     setCoverResult("idle");
+    setSearchResults([]);
+    setSearchDropdownOpen(false);
     setStatus("want-to-read");
     setNotes("");
+  }
+
+  function handleSelectResult(result: { title: string; author: string; coverUrl: string | null }) {
+    setTitle(result.title);
+    setAuthor(result.author);
+    if (result.coverUrl) setCoverUrl(result.coverUrl);
+    setSearchDropdownOpen(false);
+    setSearchResults([]);
   }
 
   async function handleFindCover() {
@@ -137,18 +178,85 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
               </button>
             </div>
 
-            <div>
+            <div className="relative">
               <label className="text-xs font-medium text-text-secondary mb-1 block">
                 Title *
               </label>
               <input
+                ref={titleInputRef}
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (!searchDropdownOpen || searchResults.length === 0) return;
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setHighlightIndex((prev) => Math.min(prev + 1, searchResults.length - 1));
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setHighlightIndex((prev) => Math.max(prev - 1, -1));
+                  } else if (e.key === "Enter" && highlightIndex >= 0) {
+                    e.preventDefault();
+                    handleSelectResult(searchResults[highlightIndex]);
+                  } else if (e.key === "Escape") {
+                    setSearchDropdownOpen(false);
+                  }
+                }}
                 required
                 placeholder="The Name of the Wind"
                 className="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors"
               />
+
+              {/* Search dropdown */}
+              {searchDropdownOpen && searchResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-surface-elevated border border-border rounded-xl overflow-hidden shadow-lg max-h-56 overflow-y-auto">
+                  {searchResults.map((result, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handleSelectResult(result)}
+                      onMouseEnter={() => setHighlightIndex(i)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                        i === highlightIndex
+                          ? "bg-accent/10"
+                          : "hover:bg-border/30"
+                      }`}
+                    >
+                      {/* Cover thumbnail */}
+                      <div className="w-8 h-11 shrink-0 rounded overflow-hidden bg-border/30">
+                        {result.coverUrl ? (
+                          <img
+                            src={result.coverUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-text-secondary/30">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+                              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                      {/* Title + author */}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-text-primary truncate">
+                          {result.title}
+                        </p>
+                        <p className="text-xs text-text-secondary truncate">
+                          {result.author}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                  {searchingTitle && (
+                    <div className="px-3 py-2 text-xs text-text-secondary/70">
+                      Searching…
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>

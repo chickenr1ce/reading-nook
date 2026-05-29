@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Star as StarIcon, Trash } from "@phosphor-icons/react";
+import { X, Star as StarIcon, Trash, MagnifyingGlass } from "@phosphor-icons/react";
 import type { Book, BookStatus } from "@/types";
 
 interface BookDetailProps {
   book: Book | null;
   onClose: () => void;
-  onUpdate: (id: string, patch: Partial<Pick<Book, "status" | "rating" | "notes">>) => void;
+  onUpdate: (id: string, patch: Partial<Pick<Book, "title" | "author" | "status" | "rating" | "notes" | "coverUrl">>) => void;
   onDelete: (id: string) => void;
 }
 
@@ -22,6 +22,21 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
   const [rating, setRating] = useState(book?.rating ?? 0);
   const [hoverStar, setHoverStar] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(book?.title ?? "");
+  const [draftAuthor, setDraftAuthor] = useState(book?.author ?? "");
+  const [coverUrl, setCoverUrl] = useState(book?.coverUrl ?? "");
+  const [coverSearching, setCoverSearching] = useState(false);
+  const [coverResult, setCoverResult] = useState<"idle" | "found" | "not_found">("idle");
+
+  // Sync local state when book changes (different book selected)
+  useEffect(() => {
+    if (!book) return;
+    setDraftTitle(book.title);
+    setDraftAuthor(book.author);
+    setCoverUrl(book.coverUrl ?? "");
+    setRating(book.rating);
+    setCoverResult("idle");
+  }, [book?.id]);
 
   if (!book) return null;
 
@@ -34,6 +49,40 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
 
   function handleStatusChange(status: BookStatus) {
     onUpdate(book!.id, { status });
+  }
+
+  function handleCoverChange(url: string) {
+    setCoverUrl(url);
+    onUpdate(book!.id, { coverUrl: url.trim() || undefined });
+    setCoverResult("idle");
+  }
+
+  async function handleFindCover() {
+    if (!book) return;
+    const searchTitle = draftTitle || book.title;
+    const searchAuthor = draftAuthor || book.author;
+    if (!searchTitle || !searchAuthor) return;
+    setCoverSearching(true);
+    setCoverResult("idle");
+    try {
+      const params = new URLSearchParams({
+        title: searchTitle,
+        author: searchAuthor,
+      });
+      const res = await fetch(`/api/covers?${params}`);
+      const data = await res.json();
+      if (data.coverUrl) {
+        setCoverUrl(data.coverUrl);
+        onUpdate(book.id, { coverUrl: data.coverUrl });
+        setCoverResult("found");
+      } else {
+        setCoverResult("not_found");
+      }
+    } catch {
+      setCoverResult("not_found");
+    } finally {
+      setCoverSearching(false);
+    }
   }
 
   return (
@@ -99,11 +148,33 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
 
           {/* Content */}
           <div className="p-5 space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-text-primary leading-snug">
-                {book.title}
-              </h2>
-              <p className="text-sm text-text-secondary">{book.author}</p>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                onBlur={() => {
+                  const trimmed = draftTitle.trim();
+                  if (trimmed && trimmed !== book.title) {
+                    onUpdate(book.id, { title: trimmed });
+                  }
+                }}
+                placeholder="Title"
+                className="w-full text-lg font-semibold text-text-primary bg-transparent border-b border-transparent hover:border-border focus:border-accent focus:outline-none transition-colors pb-0.5 placeholder:text-text-secondary/40"
+              />
+              <input
+                type="text"
+                value={draftAuthor}
+                onChange={(e) => setDraftAuthor(e.target.value)}
+                onBlur={() => {
+                  const trimmed = draftAuthor.trim();
+                  if (trimmed && trimmed !== book.author) {
+                    onUpdate(book.id, { author: trimmed });
+                  }
+                }}
+                placeholder="Author"
+                className="w-full text-sm text-text-secondary bg-transparent border-b border-transparent hover:border-border focus:border-accent focus:outline-none transition-colors pb-0.5 placeholder:text-text-secondary/40"
+              />
             </div>
 
             {/* Status selector */}
@@ -162,6 +233,39 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
                 </p>
               </div>
             )}
+
+            {/* Cover image */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-text-secondary">
+                  Cover image
+                </label>
+                <button
+                  type="button"
+                  onClick={handleFindCover}
+                  disabled={coverSearching}
+                  className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <MagnifyingGlass size={12} weight="bold" />
+                  {coverSearching ? "Searching…" : "Find cover"}
+                </button>
+              </div>
+              <input
+                type="url"
+                value={coverUrl}
+                onChange={(e) => handleCoverChange(e.target.value)}
+                placeholder="https://..."
+                className="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors"
+              />
+              {coverResult === "not_found" && (
+                <p className="mt-1 text-xs text-text-secondary/70">
+                  No cover found — try pasting one manually
+                </p>
+              )}
+              {coverResult === "found" && (
+                <p className="mt-1 text-xs text-green-600">Cover found ✓</p>
+              )}
+            </div>
 
             {/* Delete */}
             <div className="pt-3 border-t border-border">
