@@ -155,7 +155,7 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
         {open && (
           <motion.form
             onSubmit={handleSubmit}
-            className="absolute right-0 top-full mt-2 z-20 w-80 rounded-2xl bg-surface-elevated border border-border p-5 space-y-4"
+            className="absolute left-1/2 sm:left-auto sm:right-0 -translate-x-1/2 sm:translate-x-0 top-full mt-2 z-20 w-80 max-w-[calc(100vw-2rem)] rounded-2xl bg-surface-elevated border border-border p-5 space-y-4"
             style={{
               boxShadow:
                 "0 8px 32px rgba(44,36,27,0.12), 0 2px 8px rgba(44,36,27,0.08)",
