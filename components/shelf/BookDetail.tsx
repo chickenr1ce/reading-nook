@@ -44,20 +44,20 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
 
   const displayRating = hoverStar || rating;
 
-  function handleRating(star: number) {
+  const handleRating = (star: number) => {
     setRating(star);
-    onUpdate(book!.id, { rating: star });
-  }
+    onUpdate(book.id, { rating: star });
+  };
 
-  function handleStatusChange(status: BookStatus) {
-    onUpdate(book!.id, { status });
-  }
+  const handleStatusChange = (status: BookStatus) => {
+    onUpdate(book.id, { status });
+  };
 
-  function handleCoverChange(url: string) {
+  const handleCoverChange = (url: string) => {
     setCoverUrl(url);
-    onUpdate(book!.id, { coverUrl: url.trim() || undefined });
+    onUpdate(book.id, { coverUrl: url.trim() || undefined });
     setCoverResult("idle");
-  }
+  };
 
   async function handleFindCover() {
     if (!book) return;
@@ -185,11 +185,10 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
                 <button
                   key={opt.value}
                   onClick={() => handleStatusChange(opt.value)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                    book.status === opt.value
-                      ? "bg-accent text-cream-warm"
-                      : "bg-border/30 text-text-secondary hover:bg-border/50"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${book.status === opt.value
+                    ? "bg-accent text-cream-warm"
+                    : "bg-border/30 text-text-secondary hover:bg-border/50"
+                    }`}
                 >
                   {opt.label}
                 </button>
