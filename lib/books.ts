@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { redis } from "./kv";
-import type { Book, BookInput, UserId } from "@/types";
+import type { Book, BookInput, BookStatus, UserId } from "@/types";
 
 const BOOK_PREFIX = "books";
 const INDEX_ALL = "books:index:all";
@@ -41,7 +41,7 @@ export async function addBook(input: BookInput): Promise<Book> {
 export async function getBook(id: string): Promise<Book | null> {
   const data = await redis.hgetall(bookKey(id));
   if (!data || Object.keys(data).length === 0) return null;
-  return data as unknown as Book;
+  return rawToBook(data);
 }
 
 export async function updateBook(
@@ -90,5 +90,19 @@ export async function listBooks(owner?: UserId): Promise<Book[]> {
   const results = await pipeline.exec();
   return (results as (Record<string, unknown> | null)[])
     .filter((r): r is Record<string, unknown> => r !== null && Object.keys(r).length > 0)
-    .map((r) => r as unknown as Book);
+    .map((r) => rawToBook(r));
+}
+
+function rawToBook(rawData: Record<string, unknown>): Book {
+  return {
+    id: String(rawData.id),
+    title: String(rawData.title),
+    author: String(rawData.author),
+    rating: Number(rawData.rating) || 0,
+    coverUrl: rawData.coverUrl ? String(rawData.coverUrl) : null,
+    notes: rawData.notes ? String(rawData.notes) : "",
+    status: String(rawData.status ?? "want-to-read") as BookStatus,
+    owner: String(rawData.owner) as UserId,
+    addedAt: new Date(String(rawData.addedAt ?? Date.now())).toISOString(),
+  };
 }
