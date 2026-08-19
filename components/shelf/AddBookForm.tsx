@@ -214,7 +214,7 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
                       }`}
                     >
                       {/* Cover thumbnail */}
-                      <div className="w-8 h-11 shrink-0 rounded overflow-hidden bg-border/30">
+                      <div className="w-8 aspect-[3/4] shrink-0 rounded overflow-hidden bg-border/30">
                         {result.coverUrl ? (
                           <img
                             src={result.coverUrl}

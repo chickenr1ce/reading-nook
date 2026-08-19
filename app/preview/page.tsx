@@ -145,7 +145,7 @@ function MiniBookCard({ vars }: { vars: Record<string, string> }) {
     >
       {/* Mini cover */}
       <div
-        className="w-10 h-14 rounded flex-shrink-0 flex items-center justify-center"
+        className="w-10 aspect-[3/4] rounded flex-shrink-0 flex items-center justify-center"
         style={{ background: `${vars["--accent"]}18` }}
       >
         <BookOpen size={16} style={{ color: vars["--accent"], opacity: 0.6 }} weight="duotone" />

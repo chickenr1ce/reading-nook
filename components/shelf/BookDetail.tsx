@@ -87,13 +87,13 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
           exit={{ opacity: 0, y: 40, scale: 0.96 }}
           transition={{ type: "spring", stiffness: 350, damping: 30 }}
         >
-          {/* Header image */}
-          <div className="relative h-48 bg-accent/10">
+          {/* Cover — same 3:4 portrait ratio as the shelf cards */}
+          <div className="relative h-48 bg-accent/10 flex items-center justify-center p-4">
             {book.coverUrl ? (
               <img
                 src={book.coverUrl}
                 alt={`Cover of ${book.title}`}
-                className="w-full h-full object-cover"
+                className="h-full aspect-[3/4] object-cover rounded-lg shadow-md"
               />
             ) : (
               <BookPlaceholder className="w-12 h-12 text-accent/30" />
