@@ -11,30 +11,24 @@ import { displayName } from "@/lib/names";
 import type { Book, BookStatus, UserId } from "@/types";
 
 interface BookshelfProps {
-  initialBooks: Book[];
+  books: Book[];
+  setBooks: React.Dispatch<React.SetStateAction<Book[]>>;
   activeShelf: UserId;
   onShelfChange: (user: UserId) => void;
-  onBooksChanged?: (books: Book[]) => void;
   recDrawer?: React.ReactNode;
 }
 
 export function Bookshelf({
-  initialBooks,
+  books,
+  setBooks,
   activeShelf,
   onShelfChange,
-  onBooksChanged,
   recDrawer,
 }: BookshelfProps) {
-  const [books, setBooks] = useState<Book[]>(initialBooks);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(false);
 
   const shelfBooks = books.filter((b) => b.owner === activeShelf);
-
-  // Notify parent when books change — deferred to avoid setState-during-render
-  useEffect(() => {
-    onBooksChanged?.(books);
-  }, [books, onBooksChanged]);
 
   const refreshBooks = useCallback(async () => {
     const res = await fetch(`/api/books?owner=${activeShelf}`);
@@ -45,7 +39,7 @@ export function Bookshelf({
         return [...other, ...data];
       });
     }
-  }, [activeShelf]);
+  }, [activeShelf, setBooks]);
 
   // Refresh when shelf changes
   useEffect(() => {
@@ -147,6 +141,7 @@ export function Bookshelf({
 
       {/* Detail modal */}
       <BookDetail
+        key={selectedBook?.id ?? "none"}
         book={selectedBook}
         onClose={() => setSelectedBook(null)}
         onUpdate={handleUpdateBook}

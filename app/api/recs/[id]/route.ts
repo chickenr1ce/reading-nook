@@ -6,7 +6,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const ok = await markRecRead(id);
+  if (!id || typeof id !== "string" || id.trim().length === 0) {
+    return NextResponse.json({ error: "Missing or invalid id parameter" }, { status: 400 });
+  }
+
+  const ok = await markRecRead(id.trim());
   if (!ok) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }

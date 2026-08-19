@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkIn, getTodayStatus, getStreaks, getMonthCheckins, resetCheckins } from "@/lib/checkin";
-import type { UserId } from "@/types";
+import { checkinCreateSchema, checkinMonthQuerySchema } from "@/lib/validations";
 
 export async function GET(req: NextRequest) {
-  const month = req.nextUrl.searchParams.get("month"); // "YYYY-MM"
+  const rawMonth = req.nextUrl.searchParams.get("month");
+  const parsedQuery = checkinMonthQuerySchema.safeParse({ month: rawMonth });
 
+  if (!parsedQuery.success) {
+    return NextResponse.json(
+      { error: "Invalid month query format. Must be YYYY-MM." },
+      { status: 400 }
+    );
+  }
+
+  const month = parsedQuery.data.month;
   const [status, streaks] = await Promise.all([getTodayStatus(), getStreaks()]);
 
   const response: Record<string, unknown> = { status, streaks };
 
-  if (month && /^\d{4}-\d{2}$/.test(month)) {
+  if (month) {
     response.month = await getMonthCheckins(month);
   }
 
@@ -17,18 +26,24 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  try {
+    const body = await req.json();
+    const result = checkinCreateSchema.safeParse(body);
 
-  if (!body.userId || (body.userId !== "you" && body.userId !== "her")) {
-    return NextResponse.json(
-      { error: "userId must be 'you' or 'her'" },
-      { status: 400 }
-    );
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: result.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const checkinResult = await checkIn(result.data.userId);
+    const [status, streaks] = await Promise.all([getTodayStatus(), getStreaks()]);
+    return NextResponse.json({ checkIn: checkinResult, status, streaks }, { status: 201 });
+  } catch (err) {
+    console.error("POST /api/checkin error:", err);
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-
-  const result = await checkIn(body.userId as UserId);
-  const [status, streaks] = await Promise.all([getTodayStatus(), getStreaks()]);
-  return NextResponse.json({ checkIn: result, status, streaks }, { status: 201 });
 }
 
 export async function DELETE() {

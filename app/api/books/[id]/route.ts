@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBook, updateBook, deleteBook } from "@/lib/books";
+import { bookUpdateSchema } from "@/lib/validations";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id) {
+    return NextResponse.json({ error: "Missing id parameter" }, { status: 400 });
+  }
+
   const book = await getBook(id);
   if (!book) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -18,28 +23,31 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const body = await req.json();
-
-  if (body.rating !== undefined && (body.rating < 0 || body.rating > 5)) {
-    return NextResponse.json(
-      { error: "rating must be between 0 and 5" },
-      { status: 400 }
-    );
+  if (!id) {
+    return NextResponse.json({ error: "Missing id parameter" }, { status: 400 });
   }
 
-  const book = await updateBook(id, {
-    title: body.title,
-    author: body.author,
-    status: body.status,
-    rating: body.rating,
-    notes: body.notes,
-    coverUrl: body.coverUrl,
-  });
+  try {
+    const body = await req.json();
+    const result = bookUpdateSchema.safeParse(body);
 
-  if (!book) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: result.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const book = await updateBook(id, result.data);
+
+    if (!book) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    return NextResponse.json(book);
+  } catch (err) {
+    console.error("PATCH /api/books/[id] error:", err);
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  return NextResponse.json(book);
 }
 
 export async function DELETE(

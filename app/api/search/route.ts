@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { searchQuerySchema } from "@/lib/validations";
+import { EXTERNAL_API_TIMEOUT_MS } from "@/lib/constants";
 
 interface SearchResult {
   title: string;
@@ -7,10 +9,15 @@ interface SearchResult {
 }
 
 export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q")?.trim();
-  if (!q || q.length < 2) {
+  const queryResult = searchQuerySchema.safeParse({
+    q: req.nextUrl.searchParams.get("q") || "",
+  });
+
+  if (!queryResult.success) {
     return NextResponse.json([]);
   }
+
+  const { q } = queryResult.data;
 
   // 1. Try Open Library
   const olResults = await searchOpenLibrary(q);
@@ -28,7 +35,7 @@ async function searchOpenLibrary(q: string): Promise<SearchResult[]> {
   const url = `https://openlibrary.org/search.json?${params.toString()}`;
 
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS) });
     if (!res.ok) return [];
 
     const data = await res.json();
@@ -72,7 +79,7 @@ async function searchAniList(q: string): Promise<SearchResult | null> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, variables: { search: q } }),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
     });
 
     if (!res.ok) return null;

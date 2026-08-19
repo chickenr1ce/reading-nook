@@ -184,17 +184,6 @@ function MiniBookCard({ vars }: { vars: Record<string, string> }) {
   );
 }
 
-function Swatch({ hex, name }: { hex: string; name: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <div
-        className="w-4 h-4 rounded-full border border-black/10 flex-shrink-0"
-        style={{ background: hex }}
-      />
-      <span className="text-[10px] text-white/80">{name}</span>
-    </div>
-  );
-}
 
 function AddBookButton({ vars }: { vars: Record<string, string> }) {
   return (

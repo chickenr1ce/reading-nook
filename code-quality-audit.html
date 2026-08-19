@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reading Nook — Code Quality Audit</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+    --p0: #dc2626;
+    --p0-bg: #fef2f2;
+    --p0-border: #fecaca;
+    --p1: #ea580c;
+    --p1-bg: #fff7ed;
+    --p1-border: #fed7aa;
+    --p2: #2563eb;
+    --p2-bg: #eff6ff;
+    --p2-border: #bfdbfe;
+    --p3: #6b7280;
+    --p3-bg: #f9fafb;
+    --p3-border: #e5e7eb;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1c1917 0%, #44403c 100%);
+    color: #fafaf9;
+    padding: 3rem 2rem 2.5rem;
+    text-align: center;
+  }
+  .header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+  .header .subtitle { color: #a8a29e; font-size: 0.95rem; }
+  .meta { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
+  .meta span { background: rgba(255,255,255,0.08); padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.8rem; color: #d6d3d1; }
+
+  /* Layout */
+  .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* Summary Cards */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 3rem; }
+  .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; text-align: center; }
+  .summary-card .num { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; }
+  .summary-card .label { font-size: 0.8rem; color: var(--muted); margin-top: 0.15rem; }
+
+  /* Section */
+  .section { margin-bottom: 2.5rem; }
+  .section-title {
+    display: flex; align-items: center; gap: 0.6rem; font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border);
+  }
+
+  /* File Size Table */
+  .file-table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; background: var(--surface); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+  .file-table th { text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0.75rem 1rem; background: #fafaf9; }
+  .file-table td { padding: 0.6rem 1rem; border-top: 1px solid var(--border); font-size: 0.9rem; }
+  .file-table tr:last-child td { border-bottom: none; }
+  .file-table .lines { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .flag-warn { color: #d97706; font-weight: 600; }
+
+  /* Finding Card */
+  .finding {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;
+    transition: box-shadow 0.15s;
+  }
+  .finding:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+
+  .finding-header { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.75rem; }
+  .priority-badge {
+    flex-shrink: 0; font-size: 0.7rem; font-weight: 800; padding: 0.2rem 0.55rem; border-radius: 6px; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.5;
+  }
+  .priority-badge.p0 { background: var(--p0-bg); color: var(--p0); border: 1px solid var(--p0-border); }
+  .priority-badge.p1 { background: var(--p1-bg); color: var(--p1); border: 1px solid var(--p1-border); }
+  .priority-badge.p2 { background: var(--p2-bg); color: var(--p2); border: 1px solid var(--p2-border); }
+  .priority-badge.p3 { background: var(--p3-bg); color: var(--p3); border: 1px solid var(--p3-border); }
+
+  .finding-title { font-weight: 700; font-size: 1rem; flex: 1; }
+  .finding-file { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.5rem; display: block; }
+
+  /* Code blocks */
+  pre.code {
+    background: #1c1917; color: #e7e5e4; padding: 1rem 1.25rem; border-radius: 8px; font-size: 0.82rem; line-height: 1.7; overflow-x: auto; margin: 0.75rem 0;
+    font-family: "SF Mono", "Fira Code", Menlo, monospace;
+  }
+  pre.code .comment { color: #78716c; }
+  pre.code .str { color: #a78bfa; }
+  pre.code .kw { color: #fb923c; }
+
+  .fix-label { font-weight: 700; font-size: 0.85rem; margin-top: 1rem; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem; }
+  .fix-label::before { content: "→"; color: #16a34a; font-weight: 700; }
+
+  /* Priority table */
+  .priority-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+  .priority-table th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0.7rem 1rem; background: #fafaf9; }
+  .priority-table td { padding: 0.75rem 1rem; border-top: 1px solid var(--border); font-size: 0.88rem; vertical-align: top; }
+  .priority-table tr:last-child td { border-bottom: none; }
+  .effort-badge { background: #f0fdf4; color: #16a34a; font-weight: 700; font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
+
+  /* Verdict */
+  .verdict { background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border: 2px solid #facc15; border-radius: 16px; padding: 2rem; margin-top: 3rem; }
+  .verdict h3 { font-size: 1.3rem; margin-bottom: 1rem; }
+  .verdict ol { padding-left: 1.4rem; }
+  .verdict li { margin-bottom: 0.75rem; font-size: 0.95rem; }
+  .verdict strong { color: #854d0e; }
+
+  @media (max-width: 600px) {
+    .header { padding: 2rem 1rem 1.5rem; }
+    .header h1 { font-size: 1.5rem; }
+    .container { padding: 1.5rem 1rem 3rem; }
+    .finding { padding: 1.25rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔥 Reading Nook — Code Quality Audit</h1>
+  <div class="subtitle">Thermo-Nuclear Review · Structural Analysis &amp; Recommendations</div>
+  <div class="meta">
+    <span>Branch: main</span>
+    <span>Commit: e40fb25</span>
+    <span>36 files audited</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Summary Cards -->
+  <div class="summary-grid">
+    <div class="summary-card"><div class="num" style="color:var(--p0)">3</div><div class="label">Critical Issues (P0)</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--p1)">5</div><div class="label">High Issues / Refactors (P1)</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--p1)">120→2</div><div class="label">Redis Calls Reduced</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--p2)">~100</div><div class="label">Duplicate LOC to Remove</div></div>
+  </div>
+
+  <!-- File Size Warnings -->
+  <div class="section">
+    <div class="section-title">📏 File Size Concerns</div>
+    <table class="file-table">
+      <thead><tr><th>File</th><th style="width:80px">Lines</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>components/shelf/AddBookForm.tsx</code></td><td class="lines">364</td><td class="flag-warn">🚩 Over 300 — form + search + keyboard nav</td></tr>
+        <tr><td><code>app/preview/page.tsx</code></td><td class="lines">336</td><td class="flag-warn">🚩 Unusually long for a preview page</td></tr>
+        <tr><td><code>components/shelf/BookDetail.tsx</code></td><td class="lines">318</td><td class="flag-warn">🚩 8 local states + cover search + modal</td></tr>
+        <tr><td><code>components/stats/CheckInButton.tsx</code></td><td class="lines">291</td><td>⚠️ Borderline — calendar + streaks + check-in</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- CRITICAL FINDINGS -->
+  <div class="section">
+    <div class="section-title" style="color:var(--p0)">🔴 Critical — Type Safety Violations</div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p0">P0</span>
+        <span class="finding-title">Double-cast pattern bypasses TypeScript safety in lib/books.ts <span style="font-size:0.75rem; color:#16a34a; font-weight:normal;">[✓ Resolved in commit 1d1da6e]</span></span>
+      </div>
+      <span class="finding-file">lib/books.ts — lines 32, 44, 93 (as of e40fb25)</span>
+<pre class="code"><span class="comment">// These completely disable type checking:</span>
+await redis.hset(bookKey(id), book <span class="kw">as unknown as Record&lt;string, unknown&gt;</span>);
+const book = data <span class="kw">as unknown as Book</span>;
+
+<span class="comment">// Impact: rating comes back as a string from Redis.</span>
+<span class="comment">// Comparing book.rating &lt; 0 will produce wrong results.</span></pre>
+      <div class="fix-label">Fix: Write a proper deserializer instead of casting</div>
+<pre class="code"><span class="comment">// Replace the double-cast with a typed transformer:</span>
+<span class="kw">function</span> rawToBook(raw: Record&lt;string, string | number&gt;): Book {
+  <span class="kw">return</span> {
+    ...raw,
+    rating: Number(raw.rating) || <span class="str">0</span>,
+    addedAt: <span class="kw">new</span> Date(<span class="kw">String</span>(raw.addedAt)).toISOString(),
+  };
+}</pre>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p0">P0</span>
+        <span class="finding-title">Non-null assertions as a band-aid in BookDetail.tsx <span style="font-size:0.75rem; color:#16a34a; font-weight:normal;">[✓ Resolved in commit 46cb6a9]</span></span>
+      </div>
+      <span class="finding-file">BookDetail.tsx — lines 49, 53, 58 (three instances of book!.id as of e40fb25)</span>
+<pre class="code"><span class="comment">// TypeScript can't narrow through the closure boundary,</span>
+<span class="comment">// so ! is used as a band-aid after an early return guard:</span>
+<span class="kw">if</span> (!book) <span class="kw">return</span> <span class="str">null</span>;
+<span class="comment">// later inside closure...</span>
+onClick={() => handleDelete(book!.id)}  <span class="comment">// ❌ unsound</span></pre>
+      <div class="fix-label">Fix: Capture book in scope before defining closures</div>
+<pre class="code"><span class="kw">const</span> handleDelete = () => {
+  <span class="kw">const</span> bookId = book.id; <span class="comment">// safely narrowed here</span>
+  deleteBook(bookId);
+};
+<span class="kw">return</span> &lt;<span class="str">button onClick={handleDelete}</span>&gt;Delete&lt;/<span class="str">button</span>&gt;;</pre>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p0">P0</span>
+        <span class="finding-title">No runtime validation on any API route</span>
+      </div>
+      <span class="finding-file">All 7 API routes — input accepted as raw objects</span>
+<pre class="code"><span class="comment">// PATCH /api/books/[id] blindly passes all body fields:</span>
+<span class="kw">const</span> book = <span class="kw">await</span> updateBook(id, {
+  title: body.title,       <span class="comment">// could be undefined</span>
+  status: body.status,     <span class="comment">// no validation — "destroyed" is possible</span>
+  rating: body.rating,     <span class="comment">// only checks range if checked at all</span>
+});</pre>
+      <div class="fix-label">Fix: Add Zod schemas for every route's input shape</div>
+<pre class="code"><span class="kw">import</span> { z } <span class="kw">from</span> <span class="str">'zod'</span>;
+
+<span class="kw">const</span> BookSchema = z.object({
+  title: z.string().min(<span class="str">1</span>),
+  author: z.string().min(<span class="str">1</span>),
+  status: z.enum([<span class="str">'reading'</span>, <span class="str">'finished'</span>, <span class="str">'want-to-read'</span>]),
+  rating: z.number().min(<span class="str">0</span>).max(<span class="str">5</span>).optional(),
+});
+
+<span class="kw">const</span> result = BookSchema.safeParse(body);
+<span class="kw">if</span> (!result.success) <span class="kw">return</span> Response.json(result.error, { status: <span class="str">400</span> });</pre>
+    </div>
+  </div>
+
+  <!-- HIGH FINDINGS -->
+  <div class="section">
+    <div class="section-title" style="color:var(--p1)">🟠 High — Performance &amp; Code Judo Moves</div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p1">P1</span>
+        <span class="finding-title">N+1 streak calculation: 60 sequential Redis calls per user</span>
+      </div>
+      <span class="finding-file">lib/checkin.ts — lines 23–43</span>
+<pre class="code"><span class="comment">// Makes up to 60 sequential HTTP requests for streak calc:</span>
+<span class="kw">for</span> (<span class="kw">let</span> i = <span class="str">0</span>; i &lt; <span class="str">60</span>; i++) {
+  <span class="kw">const</span> exists = <span class="kw">await</span> redis.<span class="kw">exists</span>(checkinKey(userId, date));
+  <span class="comment">// If each RTT is ~10ms → 600ms per user, 1200ms total</span>
+}</pre>
+      <div class="fix-label">Fix: Use the sorted-set index for a single batch fetch, compute in-memory</div>
+<pre class="code"><span class="comment">// One ZRANGEBYSCORE gives all dates:</span>
+<span class="kw">const</span> allDates = <span class="kw">await</span> redis.zrange(
+  <span class="str">`checkin:dates:${userId}`</span>, <span class="str">0</span>, -<span class="str">1</span>, { rev: <span class="str">true</span> }
+);
+<span class="comment">// Then compute streak in O(60) memory ops — zero extra RTTs.</span></pre>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p1">P1</span>
+        <span class="finding-title">Cover search logic duplicated across AddBookForm and BookDetail (~60 lines)</span>
+      </div>
+      <span class="finding-file">AddBookForm.tsx:102–121 + BookDetail.tsx:62–88</span>
+<pre class="code"><span class="comment">// Identical state shape, identical try/catch, identical API call:</span>
+<span class="kw">const</span> [coverSearching, setCoverSearching] = useState(<span class="str">'idle'</span>);
+<span class="kw">const</span> handleFindCover = <span class="kw">async</span> () => {
+  <span class="kw">try</span> {
+    <span class="kw">const</span> res = <span class="kw">await</span> fetch(<span class="str">'/api/covers?title=...&amp;author=...'</span>);
+    <span class="comment">// ...same parsing logic in both places</span>
+  } <span class="kw">catch</span> (e) { /* ... */ }
+};</pre>
+      <div class="fix-label">Fix: Extract a useCoverLookup() hook — eliminates ~60 LOC</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p1">P1</span>
+        <span class="finding-title">statusOptions array defined identically in two files</span>
+      </div>
+      <span class="finding-file">AddBookForm.tsx:21–25 + BookDetail.tsx:15–19</span>
+<pre class="code"><span class="comment">// Identical 3-item array copied verbatim:</span>
+<span class="kw">const</span> statusOptions = [
+  { value: <span class="str">'reading'</span>, label: <span class="str">'Reading'</span> },
+  { value: <span class="str">'finished'</span>, label: <span class="str">'Finished'</span> },
+  { value: <span class="str">'want-to-read'</span>, label: <span class="str">'Want to read'</span> },
+];</pre>
+      <div class="fix-label">Fix: Single exported constant from types/index.ts or lib/</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p1">P1</span>
+        <span class="finding-title">Book placeholder SVG duplicated across components</span>
+      </div>
+      <span class="finding-file">BookCard.tsx + BookDetail.tsx + AddBookForm.tsx (3 files, 3 instances + inline star SVGs)</span>
+<pre class="code"><span class="comment">// Same two-path SVG repeated across card, detail, and form thumbnails:</span>
+&lt;svg&gt;&lt;<span class="str">path</span> <span class="kw">d</span>=<span class="str">"M4 19.5..."</span> /&gt;&lt;<span class="str">path</span> <span class="kw">d</span>=<span class="str">"M6.5 2..."</span> /&gt;&lt;/svg&gt;</pre>
+      <div class="fix-label">Fix: Single &lt;BookPlaceholder /&gt; component or use Phosphor Book icon</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p1">P1</span>
+        <span class="finding-title">Diamond dot CSS copy-pasted 4 times in CheckInButton</span>
+      </div>
+      <span class="finding-file">CheckInButton.tsx — lines 239, 246, 262, 269</span>
+<pre class="code"><span class="comment">// Exact same clipPath string repeated:</span>
+style={{ clipPath: <span class="str">'polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%)'</span> }}
+<span class="comment">// ...appears identically four times</span></pre>
+      <div class="fix-label">Fix: Extract a &lt;DiamondDot /&gt; component or CSS class</div>
+    </div>
+  </div>
+
+  <!-- MEDIUM FINDINGS -->
+  <div class="section">
+    <div class="section-title" style="color:var(--p2)">🔵 Medium — Anti-Patterns &amp; Technical Debt</div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p2">P2</span>
+        <span class="finding-title">Hardcoded display names bypass existing displayName() utility</span>
+      </div>
+      <span class="finding-file">PageContent.tsx:120 + CheckInButton.tsx:144, 159, 163</span>
+<pre class="code"><span class="comment">// displayName() exists in lib/names.ts but isn't used here:</span>
+{activeShelf === <span class="str">"you"</span> ? <span class="str">"Alexiz"</span> : <span class="str">"Ying"</span>}  <span class="comment">// ❌ hardcoded</span>
+userId === <span class="str">"you"</span> ? <span class="str">"her"</span> : <span class="str">"you"</span>               <span class="comment">// ❌ inline swap</span></pre>
+      <div class="fix-label">Fix: Use displayName() from lib/names.ts consistently</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p2">P2</span>
+        <span class="finding-title">Magic numbers scattered across the codebase</span>
+      </div>
+      <span class="finding-file">lib/checkin.ts + AddBookForm.tsx + RecDrawer.tsx + CheckInButton.tsx</span>
+<pre class="code"><span class="str">60</span>   <span class="comment">// streak search depth (checkin.ts ×2)</span>
+<span class="str">90</span>   <span class="comment">// check-in TTL days</span>
+<span class="str">300</span>  <span class="comment">// debounce timeout</span>
+<span class="str">1500</span> <span class="comment">// auto-close delay after send rec</span>
+<span class="str">2500</span> <span class="comment">// just-checked flash duration</span></pre>
+      <div class="fix-label">Fix: Centralize in a lib/constants.ts file</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p2">P2</span>
+        <span class="finding-title">Stale closure race condition in RecDrawer timeout</span>
+      </div>
+      <span class="finding-file">RecDrawer.tsx — lines 47–50</span>
+<pre class="code"><span class="kw">setTimeout</span>(() => {
+  setSent(<span class="str">false</span>);
+  setOpen(<span class="str">false</span>); <span class="comment">// fires even if component unmounted before 1500ms</span>
+}, <span class="str">1500</span>);</pre>
+      <div class="fix-label">Fix: Track mounted state with a ref, cancel timeout on unmount</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p2">P2</span>
+        <span class="finding-title">CheckInButton owns calendar + streaks + check-in logic (291 lines)</span>
+      </div>
+      <span class="finding-file">components/stats/CheckInButton.tsx — deeply nested responsive branching at lines 103–179</span>
+<pre class="code"><span class="comment">// Smells like 4 responsibilities crammed into one file:</span>
+<span class="comment">// 1. Monthly calendar grid rendering (buildMonthGrid)</span>
+<span class="comment">// 2. Month navigation logic (navMonth)</span>
+<span class="comment">// 3. Streak display with sm:flex-row / sm:hidden branches</span>
+<span class="comment">// 4. Check-in API calls + data fetching</span></pre>
+      <div class="fix-label">Fix: Extract &lt;CalendarGrid /&gt;, &lt;StreakDisplayDesktop /&gt;, &lt;StreakDisplayMobile /&gt;</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="priority-badge p2">P2</span>
+        <span class="finding-title">No error boundaries — one crashed component takes down the entire page</span>
+      </div>
+      <span class="finding-file">components/PageContent.tsx</span>
+<pre class="code"><span class="comment">// Entire app renders under a single PageContent:</span>
+<span class="comment">// A crash in AddBookForm → bookshelf, stats, nav all gone</span>
+&lt;<span class="str">PageContent</span> /&gt;</pre>
+      <div class="fix-label">Fix: Wrap each section in a lightweight ErrorBoundary with recovery</div>
+    </div>
+  </div>
+
+  <!-- PRIORITY RANKING TABLE -->
+  <div class="section">
+    <div class="section-title">📊 Priority Ranking — Fix These First</div>
+    <table class="priority-table">
+      <thead>
+        <tr><th style="width:60px">Priority</th><th>Issue</th><th>Impact</th><th style="width:80px; text-align:center">Effort</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="priority-badge p0" style="font-size:0.65rem">P0</span></td>
+          <td>Fix double-cast pattern in lib/books.ts <span style="font-size:0.7rem; color:#16a34a;">(✓ Done in 1d1da6e)</span></td>
+          <td>Closes type-safety hole causing runtime bugs</td>
+          <td style="text-align:center"><span class="effort-badge">Resolved</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p0" style="font-size:0.65rem">P0</span></td>
+          <td>Remove non-null assertions in BookDetail.tsx <span style="font-size:0.7rem; color:#16a34a;">(✓ Done in 46cb6a9)</span></td>
+          <td>Safely narrows types through closures</td>
+          <td style="text-align:center"><span class="effort-badge">Resolved</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p0" style="font-size:0.65rem">P0</span></td>
+          <td>Add Zod schemas to all API routes</td>
+          <td>Prevents malformed data entering the system</td>
+          <td style="text-align:center"><span class="effort-badge">30m</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p1" style="font-size:0.65rem">P1</span></td>
+          <td>Batch-fetch streak dates (N+1 → O(1))</td>
+          <td>120→2 Redis calls, ~500ms faster page loads</td>
+          <td style="text-align:center"><span class="effort-badge">30m</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p1" style="font-size:0.65rem">P1</span></td>
+          <td>Extract useCoverLookup + deduplicate constants/icons</td>
+          <td>Removes ~100 lines of duplicated code across 5 files</td>
+          <td style="text-align:center"><span class="effort-badge">30m</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p1" style="font-size:0.65rem">P1</span></td>
+          <td>Fix stale closure in RecDrawer + effect-for-side-effect in Bookshelf</td>
+          <td>Eliminates memory leaks, makes state flow obvious</td>
+          <td style="text-align:center"><span class="effort-badge">15m</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p2" style="font-size:0.65rem">P2</span></td>
+          <td>Centralize magic numbers into lib/constants.ts</td>
+          <td>Makes every timeout/TTL changeable in one place</td>
+          <td style="text-align:center"><span class="effort-badge">10m</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p2" style="font-size:0.65rem">P2</span></td>
+          <td>Extract &lt;CalendarGrid /&gt; from CheckInButton.tsx</td>
+          <td>Reduces largest component by ~40%, independently testable</td>
+          <td style="text-align:center"><span class="effort-badge">30m</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p2" style="font-size:0.65rem">P2</span></td>
+          <td>Replace hardcoded names with displayName() utility</td>
+          <td>Prevents inconsistency if user names ever change</td>
+          <td style="text-align:center"><span class="effort-badge">5m</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p2" style="font-size:0.65rem">P2</span></td>
+          <td>Add error boundaries to each section</td>
+          <td>Crash resilience without test suite</td>
+          <td style="text-align:center"><span class="effort-badge">15m</span></td>
+        </tr>
+        <tr>
+          <td><span class="priority-badge p3" style="font-size:0.65rem">P3</span></td>
+          <td>Replace confirm() with styled modal in CheckInButton</td>
+          <td>Accessibility + UX consistency</td>
+          <td style="text-align:center"><span class="effort-badge">20m</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- VERDICT -->
+  <div class="verdict">
+    <h3>🎯 Final Verdict</h3>
+    <p style="margin-bottom:1rem; color:#44403c;">The codebase is well-structured at the high level — clean separation of pages/components/lib, pleasant UI work, no severe architectural drift. But three structural problems compound with every new feature:</p>
+    <ol>
+      <li><strong>Type safety is compromised</strong> by double-casts that bypass TypeScript entirely. The <code>as unknown as Book</code> pattern means the type system is lying about data shape — fix this first.</li>
+      <li><strong>Streak calculation is a performance bottleneck</strong> — 120 sequential Redis calls per page load. One sorted-set query replaces it entirely.</li>
+      <li><strong>Copy-paste duplication is systemic</strong> — cover search, status options, SVG icons, diamond markers all appear in multiple files identically. Extracting these eliminates ~100 LOC and makes every future change easier.</li>
+    </ol>
+    <p style="margin-top:1rem; color:#854d0e; font-size:0.9rem;"><strong>Total effort for P0–P1 items: ~2 hours</strong> for dramatic quality improvement.</p>
+  </div>
+
+</div>
+
+</body>
+</html>

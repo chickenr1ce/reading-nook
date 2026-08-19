@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Star as StarIcon, Trash, MagnifyingGlass } from "@phosphor-icons/react";
+import { BookPlaceholder } from "@/components/ui/BookPlaceholder";
+import { useCoverLookup } from "@/hooks/useCoverLookup";
+import { STATUS_OPTIONS } from "@/lib/constants";
 import type { Book, BookStatus } from "@/types";
 
 interface BookDetailProps {
@@ -12,12 +15,6 @@ interface BookDetailProps {
   onDelete: (id: string) => void;
 }
 
-const statusOptions: { value: BookStatus; label: string }[] = [
-  { value: "reading", label: "Reading" },
-  { value: "finished", label: "Finished" },
-  { value: "want-to-read", label: "Want to read" },
-];
-
 export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProps) {
   const [rating, setRating] = useState(book?.rating ?? 0);
   const [hoverStar, setHoverStar] = useState(0);
@@ -25,20 +22,9 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
   const [draftTitle, setDraftTitle] = useState(book?.title ?? "");
   const [draftAuthor, setDraftAuthor] = useState(book?.author ?? "");
   const [coverUrl, setCoverUrl] = useState(book?.coverUrl ?? "");
-  const [coverSearching, setCoverSearching] = useState(false);
-  const [coverResult, setCoverResult] = useState<"idle" | "found" | "not_found">("idle");
   const [draftNotes, setDraftNotes] = useState(book?.notes ?? "");
 
-  // Sync local state when book changes (different book selected)
-  useEffect(() => {
-    if (!book) return;
-    setDraftTitle(book.title);
-    setDraftAuthor(book.author);
-    setCoverUrl(book.coverUrl ?? "");
-    setDraftNotes(book.notes ?? "");
-    setRating(book.rating);
-    setCoverResult("idle");
-  }, [book?.id]);
+  const { coverSearching, coverResult, findCover, resetCoverResult } = useCoverLookup();
 
   if (!book) return null;
 
@@ -56,7 +42,7 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
   const handleCoverChange = (url: string) => {
     setCoverUrl(url);
     onUpdate(book.id, { coverUrl: url.trim() || undefined });
-    setCoverResult("idle");
+    resetCoverResult();
   };
 
   async function handleFindCover() {
@@ -64,26 +50,11 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
     const searchTitle = draftTitle || book.title;
     const searchAuthor = draftAuthor || book.author;
     if (!searchTitle || !searchAuthor) return;
-    setCoverSearching(true);
-    setCoverResult("idle");
-    try {
-      const params = new URLSearchParams({
-        title: searchTitle,
-        author: searchAuthor,
-      });
-      const res = await fetch(`/api/covers?${params}`);
-      const data = await res.json();
-      if (data.coverUrl) {
-        setCoverUrl(data.coverUrl);
-        onUpdate(book.id, { coverUrl: data.coverUrl });
-        setCoverResult("found");
-      } else {
-        setCoverResult("not_found");
-      }
-    } catch {
-      setCoverResult("not_found");
-    } finally {
-      setCoverSearching(false);
+
+    const foundUrl = await findCover(searchTitle, searchAuthor);
+    if (foundUrl) {
+      setCoverUrl(foundUrl);
+      onUpdate(book.id, { coverUrl: foundUrl });
     }
   }
 
@@ -125,18 +96,7 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <svg
-                  className="w-12 h-12 text-accent/30"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-                </svg>
-              </div>
+              <BookPlaceholder className="w-12 h-12 text-accent/30" />
             )}
 
             {/* Close button */}
@@ -181,7 +141,7 @@ export function BookDetail({ book, onClose, onUpdate, onDelete }: BookDetailProp
 
             {/* Status selector */}
             <div className="flex gap-1.5">
-              {statusOptions.map((opt) => (
+              {STATUS_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => handleStatusChange(opt.value)}

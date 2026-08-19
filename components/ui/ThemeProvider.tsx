@@ -29,20 +29,27 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(DEFAULT);
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+        if (stored === "forest" || stored === "garden" || stored === "starlight") {
+          return stored;
+        }
+      } catch {
+        // localStorage unavailable
+      }
+    }
+    return DEFAULT;
+  });
+
   const [mounted, setMounted] = useState(false);
 
-  // Hydrate from localStorage on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-      if (stored === "forest" || stored === "garden" || stored === "starlight") {
-        setThemeState(stored);
-      }
-    } catch {
-      // localStorage unavailable
-    }
-    setMounted(true);
+    const frame = requestAnimationFrame(() => {
+      setMounted(true);
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   // Apply data-theme attribute to <html>
