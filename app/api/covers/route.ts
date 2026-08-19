@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { coversQuerySchema } from "@/lib/validations";
+import { EXTERNAL_API_TIMEOUT_MS } from "@/lib/constants";
 
 export async function GET(req: NextRequest) {
-  const title = req.nextUrl.searchParams.get("title")?.trim();
-  const author = req.nextUrl.searchParams.get("author")?.trim();
+  const queryResult = coversQuerySchema.safeParse({
+    title: req.nextUrl.searchParams.get("title") || "",
+    author: req.nextUrl.searchParams.get("author") || "",
+  });
 
-  if (!title || !author) {
+  if (!queryResult.success) {
     return NextResponse.json({ coverUrl: null });
   }
+
+  const { title, author } = queryResult.data;
 
   // 1. Try Open Library (traditional books)
   const olCover = await fetchOpenLibrary(title, author);
@@ -27,7 +33,7 @@ async function fetchOpenLibrary(
   const url = `https://openlibrary.org/search.json?${params.toString()}`;
 
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS) });
     if (!res.ok) return null;
 
     const data = await res.json();
@@ -59,7 +65,7 @@ async function fetchAniList(title: string): Promise<string | null> {
         query,
         variables: { search: title },
       }),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
     });
 
     if (!res.ok) return null;

@@ -145,7 +145,7 @@ function MiniBookCard({ vars }: { vars: Record<string, string> }) {
     >
       {/* Mini cover */}
       <div
-        className="w-10 h-14 rounded flex-shrink-0 flex items-center justify-center"
+        className="w-10 aspect-[3/4] rounded flex-shrink-0 flex items-center justify-center"
         style={{ background: `${vars["--accent"]}18` }}
       >
         <BookOpen size={16} style={{ color: vars["--accent"], opacity: 0.6 }} weight="duotone" />
@@ -184,17 +184,6 @@ function MiniBookCard({ vars }: { vars: Record<string, string> }) {
   );
 }
 
-function Swatch({ hex, name }: { hex: string; name: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <div
-        className="w-4 h-4 rounded-full border border-black/10 flex-shrink-0"
-        style={{ background: hex }}
-      />
-      <span className="text-[10px] text-white/80">{name}</span>
-    </div>
-  );
-}
 
 function AddBookButton({ vars }: { vars: Record<string, string> }) {
   return (

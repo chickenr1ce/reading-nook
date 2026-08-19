@@ -3,6 +3,9 @@
 import { useState, FormEvent, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, X, MagnifyingGlass } from "@phosphor-icons/react";
+import { BookPlaceholder } from "@/components/ui/BookPlaceholder";
+import { useCoverLookup } from "@/hooks/useCoverLookup";
+import { STATUS_OPTIONS, SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import type { BookStatus, UserId } from "@/types";
 
 interface AddBookFormProps {
@@ -18,12 +21,6 @@ interface AddBookFormProps {
   }) => void;
 }
 
-const statusOptions: { value: BookStatus; label: string }[] = [
-  { value: "reading", label: "Reading" },
-  { value: "finished", label: "Finished" },
-  { value: "want-to-read", label: "Want to read" },
-];
-
 export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -32,8 +29,6 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
   const [status, setStatus] = useState<BookStatus>("want-to-read");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [coverSearching, setCoverSearching] = useState(false);
-  const [coverResult, setCoverResult] = useState<"idle" | "found" | "not_found">("idle");
   const [searchResults, setSearchResults] = useState<Array<{ title: string; author: string; coverUrl: string | null }>>([]);
   const [searchingTitle, setSearchingTitle] = useState(false);
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
@@ -41,6 +36,8 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const { coverSearching, coverResult, findCover, resetCoverResult } = useCoverLookup();
 
   // Close on outside click
   useEffect(() => {
@@ -57,23 +54,24 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
   // Debounced title search
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    if (title.trim().length < 2) {
-      setSearchResults([]);
-      setSearchDropdownOpen(false);
-      return;
-    }
+    const clean = title.trim();
+    if (clean.length < 2) return;
+
     searchTimeoutRef.current = setTimeout(async () => {
       setSearchingTitle(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(title.trim())}`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(clean)}`);
         const data = await res.json();
         setSearchResults(data);
         setSearchDropdownOpen(data.length > 0);
         setHighlightIndex(-1);
+      } catch (err) {
+        console.error("Title search error:", err);
       } finally {
         setSearchingTitle(false);
       }
-    }, 300);
+    }, SEARCH_DEBOUNCE_MS);
+
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
@@ -83,8 +81,7 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
     setTitle("");
     setAuthor("");
     setCoverUrl("");
-    setCoverSearching(false);
-    setCoverResult("idle");
+    resetCoverResult();
     setSearchResults([]);
     setSearchDropdownOpen(false);
     setStatus("want-to-read");
@@ -101,22 +98,9 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
 
   async function handleFindCover() {
     if (!title.trim() || !author.trim()) return;
-    setCoverSearching(true);
-    setCoverResult("idle");
-    try {
-      const params = new URLSearchParams({ title: title.trim(), author: author.trim() });
-      const res = await fetch(`/api/covers?${params}`);
-      const data = await res.json();
-      if (data.coverUrl) {
-        setCoverUrl(data.coverUrl);
-        setCoverResult("found");
-      } else {
-        setCoverResult("not_found");
-      }
-    } catch {
-      setCoverResult("not_found");
-    } finally {
-      setCoverSearching(false);
+    const foundUrl = await findCover(title, author);
+    if (foundUrl) {
+      setCoverUrl(foundUrl);
     }
   }
 
@@ -186,7 +170,14 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
                 ref={titleInputRef}
                 type="text"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setTitle(val);
+                  if (val.trim().length < 2) {
+                    setSearchResults([]);
+                    setSearchDropdownOpen(false);
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (!searchDropdownOpen || searchResults.length === 0) return;
                   if (e.key === "ArrowDown") {
@@ -223,7 +214,7 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
                       }`}
                     >
                       {/* Cover thumbnail */}
-                      <div className="w-8 h-11 shrink-0 rounded overflow-hidden bg-border/30">
+                      <div className="w-8 aspect-[3/4] shrink-0 rounded overflow-hidden bg-border/30">
                         {result.coverUrl ? (
                           <img
                             src={result.coverUrl}
@@ -231,11 +222,8 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-text-secondary/30">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-                              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-                            </svg>
+                          <div className="w-full h-full flex items-center justify-center text-text-secondary/30 p-1">
+                            <BookPlaceholder className="w-3.5 h-3.5" />
                           </div>
                         )}
                       </div>
@@ -310,7 +298,7 @@ export function AddBookForm({ owner, onAdd }: AddBookFormProps) {
                 Status
               </label>
               <div className="flex gap-1.5">
-                {statusOptions.map((opt) => (
+                {STATUS_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"

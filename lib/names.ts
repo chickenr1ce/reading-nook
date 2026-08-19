@@ -15,3 +15,8 @@ export function displayName(id: UserId): string {
 export function possessiveName(id: UserId): string {
   return `${NAMES[id]}'s`;
 }
+
+/** Get the other user's ID. */
+export function getPartnerId(id: UserId): UserId {
+  return id === "you" ? "her" : "you";
+}

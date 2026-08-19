@@ -1,4 +1,5 @@
 import { redis } from "./kv";
+import { STREAK_MAX_LOOKBACK_DAYS, CHECKIN_TTL_SECONDS } from "./constants";
 import type { CheckIn, DailyCheckInStatus, StreakData, MonthCheckins, UserId } from "@/types";
 
 const DATES_SET_PREFIX = "checkin:dates"; // checkin:dates:you, checkin:dates:her
@@ -19,15 +20,18 @@ function dateToYMD(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Count consecutive days from today going backwards where the set contains the date. */
+/** Count consecutive days from today going backwards in memory using a single Redis sorted-set query. */
 async function calcStreak(userId: UserId): Promise<number> {
+  const dates = (await redis.zrange(datesSetKey(userId), 0, -1, { rev: true })) as string[];
+  if (!dates || dates.length === 0) return 0;
+  const dateSet = new Set(dates);
+
   let streak = 0;
   const d = new Date();
-  // Check up to 60 days back
-  for (let i = 0; i < 60; i++) {
+  // Check up to STREAK_MAX_LOOKBACK_DAYS back
+  for (let i = 0; i < STREAK_MAX_LOOKBACK_DAYS; i++) {
     const date = dateToYMD(d);
-    const exists = await redis.exists(checkinKey(userId, date));
-    if (exists) {
+    if (dateSet.has(date)) {
       streak++;
       d.setDate(d.getDate() - 1);
     } else {
@@ -49,7 +53,7 @@ export async function checkIn(userId: UserId): Promise<CheckIn> {
 
   // Store the check-in hash
   await redis.hset(checkinKey(userId, date), data as unknown as Record<string, unknown>);
-  await redis.expire(checkinKey(userId, date), 60 * 60 * 24 * 90);
+  await redis.expire(checkinKey(userId, date), CHECKIN_TTL_SECONDS);
 
   // Add to sorted set for date queries (score = unix timestamp of the date)
   const dateObj = new Date(date + "T00:00:00Z");

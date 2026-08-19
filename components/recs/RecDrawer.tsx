@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Gift, X } from "@phosphor-icons/react";
 import { displayName } from "@/lib/names";
+import { REC_DRAWER_AUTO_CLOSE_MS } from "@/lib/constants";
 import type { UserId } from "@/types";
 
 interface RecDrawerProps {
@@ -24,6 +25,15 @@ export function RecDrawer({ from, to, onSend }: RecDrawerProps) {
   const [bookAuthor, setBookAuthor] = useState("");
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
+  const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
 
   function reset() {
     setBookTitle("");
@@ -44,10 +54,12 @@ export function RecDrawer({ from, to, onSend }: RecDrawerProps) {
     });
     reset();
     setSent(true);
-    setTimeout(() => {
+
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
       setSent(false);
       setOpen(false);
-    }, 1500);
+    }, REC_DRAWER_AUTO_CLOSE_MS);
   }
 
   return (
